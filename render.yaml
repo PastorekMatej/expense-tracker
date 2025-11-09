@@ -8,21 +8,27 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 3000
+        value: 10000
       - key: JWT_SECRET
         generateValue: true
       - key: MOCK_OAUTH
-        value: false
+        value: true
+      - key: MOCK_OAUTH_PORT
+        value: 4000
       - key: OAUTH_SERVER_URL
         sync: false
       - key: VITE_APP_ID
-        sync: false
+        value: mock-project
       - key: VITE_APP_TITLE
         value: Expense Tracker
       - key: VITE_APP_LOGO
         value: https://placehold.co/128x128/E1E7EF/1F2937?text=App
       - key: VITE_OAUTH_PORTAL_URL
         sync: false
+      - key: VITE_ANALYTICS_ENDPOINT
+        value: ""
+      - key: VITE_ANALYTICS_WEBSITE_ID
+        value: ""
       - key: GOOGLE_SERVICE_ACCOUNT_JSON
         sync: false
 
