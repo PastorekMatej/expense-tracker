@@ -20,6 +20,32 @@ export function registerOAuthRoutes(app: Express) {
     }
 
     try {
+      // Mock OAuth mode - handle directly without HTTP calls
+      if (process.env.MOCK_OAUTH === "true" && code === "mock-code") {
+        console.log("[OAuth] Mock OAuth callback - creating mock user");
+        const mockUser = {
+          openId: "mock-user-open-id",
+          name: "Mock User",
+          email: "mock.user@example.com",
+          loginMethod: "email" as const,
+          lastSignedIn: new Date(),
+        };
+
+        await db.upsertUser(mockUser);
+
+        const sessionToken = await sdk.createSessionToken(mockUser.openId, {
+          name: mockUser.name,
+          expiresInMs: ONE_YEAR_MS,
+        });
+
+        const cookieOptions = getSessionCookieOptions(req);
+        res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+        res.redirect(302, "/");
+        return;
+      }
+
+      // Real OAuth flow
       const tokenResponse = await sdk.exchangeCodeForToken(code, state);
       const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
 
