@@ -142,6 +142,12 @@ function startApiRoutes(app: Express) {
   );
 }
 
+export function registerMockOAuthRoutes(app: Express): void {
+  console.log("[Mock OAuth] Registering mock OAuth routes on main app");
+  startPortalRoutes(app);
+  startApiRoutes(app);
+}
+
 export async function startMockOAuthServer(): Promise<Express> {
   const port = Number(process.env.MOCK_OAUTH_PORT ?? "4000");
   const app = express();
