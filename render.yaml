@@ -2,33 +2,43 @@ services:
   - type: web
     name: expense-tracker
     env: node
+    plan: free  # Use 'starter' for always-on ($7/month)
+    region: oregon  # Options: oregon, frankfurt, singapore
     buildCommand: pnpm install && pnpm build
     startCommand: pnpm start
+    healthCheckPath: /
     envVars:
+      # Core Settings
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
+      
+      # Authentication
       - key: JWT_SECRET
         generateValue: true
       - key: MOCK_OAUTH
-        value: true
-      - key: MOCK_OAUTH_PORT
-        value: 4000
+        value: false  # Set to true only for testing
       - key: OAUTH_SERVER_URL
-        sync: false
+        sync: false  # Must be set manually in Render dashboard
+      - key: VITE_OAUTH_PORTAL_URL
+        sync: false  # Must be set manually in Render dashboard
       - key: VITE_APP_ID
-        value: mock-project
+        sync: false  # Must be set manually in Render dashboard
+      
+      # App Configuration
       - key: VITE_APP_TITLE
         value: Expense Tracker
       - key: VITE_APP_LOGO
-        value: https://placehold.co/128x128/E1E7EF/1F2937?text=App
-      - key: VITE_OAUTH_PORTAL_URL
-        sync: false
-      - key: VITE_ANALYTICS_ENDPOINT
-        value: "https://example.com"
-      - key: VITE_ANALYTICS_WEBSITE_ID
-        value: "disabled"
+        value: https://placehold.co/128x128/E1E7EF/1F2937?text=Expense+Tracker
+      
+      # Google Sheets Integration
       - key: GOOGLE_SERVICE_ACCOUNT_JSON
-        sync: false
+        sync: false  # Must be set manually in Render dashboard
+      
+      # Analytics (Optional)
+      - key: VITE_ANALYTICS_ENDPOINT
+        value: ""
+      - key: VITE_ANALYTICS_WEBSITE_ID
+        value: ""
 

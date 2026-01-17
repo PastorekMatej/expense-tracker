@@ -36,6 +36,12 @@ export default function Home() {
   >([]);
 
   const addExpenseMutation = trpc.expenses.addExpense.useMutation();
+  const { data: monthlySummary, refetch: refetchMonthlySummary } = trpc.expenses.getMonthlySummary.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const { data: weeklySummary, refetch: refetchWeeklySummary } = trpc.expenses.getWeeklySummary.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
 
   const getCategoryName = (code: string) => {
     return CATEGORIES.find((cat) => cat.code === code)?.name || "Invalid Code";
@@ -85,6 +91,10 @@ export default function Home() {
 
       // Clear success message after 2 seconds
       setTimeout(() => setSubmitted(false), 2000);
+      
+      // Refetch summaries
+      refetchMonthlySummary();
+      refetchWeeklySummary();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to record expense");
     }
@@ -233,6 +243,113 @@ export default function Home() {
             </Button>
           </form>
         </Card>
+
+        {/* Spending Recap by Category */}
+        {(weeklySummary !== undefined || monthlySummary !== undefined) && (
+          <Card className="p-6 shadow-lg mb-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-6">Spending Recap by Category</h2>
+            
+            {/* Weekly Summary */}
+            {weeklySummary && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-gray-700">
+                    Current Week
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {new Date(weeklySummary.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(weeklySummary.weekEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </p>
+                </div>
+                
+                {weeklySummary.categories.length > 0 ? (
+                  <div className="space-y-2 mb-4">
+                    {weeklySummary.categories.map((category) => (
+                      <div key={`week-${category.code}`} className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-800">{category.name}</p>
+                          <p className="text-xs text-gray-600 uppercase">{category.code}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-bold text-blue-600">${category.total.toFixed(2)}</p>
+                          {weeklySummary.grandTotal > 0 && (
+                            <p className="text-xs text-gray-600">
+                              {((category.total / weeklySummary.grandTotal) * 100).toFixed(1)}% of total
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500 text-sm mb-4">
+                    No expenses recorded this week yet.
+                  </div>
+                )}
+
+                <div className="border-t border-blue-200 pt-3 mb-4">
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-gray-600">Week Total</p>
+                    <p className="text-2xl font-bold text-blue-700">${weeklySummary.grandTotal.toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Monthly Summary */}
+            {monthlySummary && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-gray-700">
+                    Current Month
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {new Date(monthlySummary.year, monthlySummary.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                  </p>
+                </div>
+                
+                <div className="space-y-2 mb-4">
+                  {CATEGORIES.map((cat) => {
+                    const categoryData = monthlySummary.categories.find(c => c.code === cat.code);
+                    const total = categoryData?.total || 0;
+                    return (
+                      <div key={`month-${cat.code}`} className={`flex items-center justify-between p-3 rounded-lg border ${
+                        total > 0 
+                          ? 'bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-100' 
+                          : 'bg-gray-50 border-gray-200 opacity-60'
+                      }`}>
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-800">{cat.name}</p>
+                          <p className="text-xs text-gray-600 uppercase">{cat.code}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-xl font-bold ${total > 0 ? 'text-indigo-600' : 'text-gray-400'}`}>
+                            ${total.toFixed(2)}
+                          </p>
+                          {monthlySummary.grandTotal > 0 && total > 0 && (
+                            <p className="text-xs text-gray-600">
+                              {((total / monthlySummary.grandTotal) * 100).toFixed(1)}% of total
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="border-t border-indigo-200 pt-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm text-gray-600">Month Total</p>
+                      <p className="text-xs text-gray-500">{monthlySummary.expenseCount} transactions</p>
+                    </div>
+                    <p className="text-2xl font-bold text-indigo-700">${monthlySummary.grandTotal.toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </Card>
+        )}
 
         {/* Recent Entries */}
         {entries.length > 0 && (
