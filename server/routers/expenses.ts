@@ -34,6 +34,22 @@ export const expensesRouter = router({
       }
     }),
 
+  getExpenses: publicProcedure.query(async () => {
+    try {
+      const expenses = await fetchExpensesFromSheet();
+      return {
+        success: true,
+        expenses,
+        count: expenses.length,
+      };
+    } catch (error) {
+      console.error("[Expenses] Failed to get expenses:", error);
+      throw new Error(
+        error instanceof Error ? error.message : "Failed to get expenses"
+      );
+    }
+  }),
+
   getMonthlySummary: publicProcedure.query(async () => {
     try {
       const expenses = await fetchExpensesFromSheet();
