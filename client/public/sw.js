@@ -39,3 +39,4 @@ self.addEventListener('message', (event) => {
 console.log('[SW] Service worker script loaded');
 
 
+

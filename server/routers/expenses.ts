@@ -173,4 +173,92 @@ export const expensesRouter = router({
       );
     }
   }),
+
+  getMonthlyWeeklySummary: publicProcedure.query(async () => {
+    try {
+      const expenses = await fetchExpensesFromSheet();
+
+      const now = new Date();
+      const currentMonthIndex = now.getMonth();
+      const currentMonth = currentMonthIndex + 1;
+      const currentYear = now.getFullYear();
+
+      const formatDate = (date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      };
+
+      const buildCategorySummary = (weekExpenses: typeof expenses) => {
+        const categoryTotals: Record<
+          string,
+          { total: number; name: string; code: string }
+        > = {};
+
+        weekExpenses.forEach((expense) => {
+          if (!categoryTotals[expense.categoryCode]) {
+            categoryTotals[expense.categoryCode] = {
+              total: 0,
+              name: expense.categoryName,
+              code: expense.categoryCode,
+            };
+          }
+          categoryTotals[expense.categoryCode].total += expense.amount;
+        });
+
+        const categories = Object.values(categoryTotals).sort(
+          (a, b) => b.total - a.total
+        );
+        const grandTotal = categories.reduce((sum, cat) => sum + cat.total, 0);
+
+        return {
+          categories,
+          grandTotal,
+          expenseCount: weekExpenses.length,
+        };
+      };
+
+      const lastDayOfMonth = new Date(
+        currentYear,
+        currentMonthIndex + 1,
+        0
+      ).getDate();
+
+      const weeks = [];
+      for (let weekStartDay = 1; weekStartDay <= lastDayOfMonth; weekStartDay += 7) {
+        const weekEndDay = Math.min(weekStartDay + 6, lastDayOfMonth);
+        const weekStart = new Date(currentYear, currentMonthIndex, weekStartDay);
+        weekStart.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(currentYear, currentMonthIndex, weekEndDay);
+        weekEnd.setHours(23, 59, 59, 999);
+
+        const weekExpenses = expenses.filter((expense) => {
+          const expenseDate = new Date(expense.date);
+          return expenseDate >= weekStart && expenseDate <= weekEnd;
+        });
+
+        const summary = buildCategorySummary(weekExpenses);
+
+        weeks.push({
+          weekStart: formatDate(weekStart),
+          weekEnd: formatDate(weekEnd),
+          ...summary,
+        });
+      }
+
+      return {
+        month: currentMonth,
+        year: currentYear,
+        weeks,
+      };
+    } catch (error) {
+      console.error("[Expenses] Failed to get monthly weekly summary:", error);
+      throw new Error(
+        error instanceof Error
+          ? error.message
+          : "Failed to get monthly weekly summary"
+      );
+    }
+  }),
 });

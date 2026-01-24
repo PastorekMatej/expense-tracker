@@ -39,9 +39,10 @@ export default function Home() {
   const { data: monthlySummary, refetch: refetchMonthlySummary } = trpc.expenses.getMonthlySummary.useQuery(undefined, {
     enabled: isAuthenticated,
   });
-  const { data: weeklySummary, refetch: refetchWeeklySummary } = trpc.expenses.getWeeklySummary.useQuery(undefined, {
-    enabled: isAuthenticated,
-  });
+  const { data: monthlyWeeklySummary, refetch: refetchMonthlyWeeklySummary } =
+    trpc.expenses.getMonthlyWeeklySummary.useQuery(undefined, {
+      enabled: isAuthenticated,
+    });
 
   const getCategoryName = (code: string) => {
     return CATEGORIES.find((cat) => cat.code === code)?.name || "Invalid Code";
@@ -94,7 +95,7 @@ export default function Home() {
       
       // Refetch summaries
       refetchMonthlySummary();
-      refetchWeeklySummary();
+      refetchMonthlyWeeklySummary();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to record expense");
     }
@@ -245,53 +246,60 @@ export default function Home() {
         </Card>
 
         {/* Spending Recap by Category */}
-        {(weeklySummary !== undefined || monthlySummary !== undefined) && (
+        {(monthlyWeeklySummary !== undefined || monthlySummary !== undefined) && (
           <Card className="p-6 shadow-lg mb-6">
             <h2 className="text-xl font-bold text-gray-800 mb-6">Spending Recap by Category</h2>
             
-            {/* Weekly Summary */}
-            {weeklySummary && (
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
+            {/* Weekly Summary (All Weeks in Current Month) */}
+            {monthlyWeeklySummary && (
+              <div className="mb-6 space-y-4">
+                <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-gray-700">
-                    Current Week
+                    Weekly Breakdown
                   </h3>
                   <p className="text-sm text-gray-500">
-                    {new Date(weeklySummary.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(weeklySummary.weekEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {new Date(monthlyWeeklySummary.year, monthlyWeeklySummary.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
                   </p>
                 </div>
-                
-                {weeklySummary.categories.length > 0 ? (
-                  <div className="space-y-2 mb-4">
-                    {weeklySummary.categories.map((category) => (
-                      <div key={`week-${category.code}`} className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-                        <div className="flex-1">
-                          <p className="font-semibold text-gray-800">{category.name}</p>
-                          <p className="text-xs text-gray-600 uppercase">{category.code}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xl font-bold text-blue-600">${category.total.toFixed(2)}</p>
-                          {weeklySummary.grandTotal > 0 && (
-                            <p className="text-xs text-gray-600">
-                              {((category.total / weeklySummary.grandTotal) * 100).toFixed(1)}% of total
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-4 text-gray-500 text-sm mb-4">
-                    No expenses recorded this week yet.
-                  </div>
-                )}
 
-                <div className="border-t border-blue-200 pt-3 mb-4">
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-gray-600">Week Total</p>
-                    <p className="text-2xl font-bold text-blue-700">${weeklySummary.grandTotal.toFixed(2)}</p>
+                {monthlyWeeklySummary.weeks.map((week, index) => (
+                  <div key={`week-${week.weekStart}-${week.weekEnd}`} className="rounded-lg border border-blue-100 bg-white">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700">Week {index + 1}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(week.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(week.weekEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </p>
+                      </div>
+                      <p className="text-lg font-bold text-blue-700">${week.grandTotal.toFixed(2)}</p>
+                    </div>
+
+                    {week.categories.length > 0 ? (
+                      <div className="space-y-2 p-4">
+                        {week.categories.map((category) => (
+                          <div key={`week-${week.weekStart}-${category.code}`} className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-800">{category.name}</p>
+                              <p className="text-xs text-gray-600 uppercase">{category.code}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-base font-bold text-blue-600">${category.total.toFixed(2)}</p>
+                              {week.grandTotal > 0 && (
+                                <p className="text-xs text-gray-600">
+                                  {((category.total / week.grandTotal) * 100).toFixed(1)}% of total
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-gray-500 text-sm">
+                        No expenses recorded for this week.
+                      </div>
+                    )}
                   </div>
-                </div>
+                ))}
               </div>
             )}
 
