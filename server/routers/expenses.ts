@@ -7,6 +7,7 @@ const expenseSchema = z.object({
   amount: z.number().positive(),
   categoryCode: z.string().min(2).max(4),
   categoryName: z.string(),
+  comment: z.string().max(500).optional(),
 });
 
 export const expensesRouter = router({
@@ -20,6 +21,7 @@ export const expensesRouter = router({
           amount: input.amount,
           categoryCode: input.categoryCode,
           categoryName: input.categoryName,
+          comment: input.comment,
         });
 
         return {
@@ -261,4 +263,140 @@ export const expensesRouter = router({
       );
     }
   }),
+
+  getLastMonthsSummaries: publicProcedure
+    .input(
+      z
+        .object({
+          count: z.number().int().min(1).max(24).optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      try {
+        const count = input?.count ?? 2;
+        const expenses = await fetchExpensesFromSheet();
+
+        const now = new Date();
+        const summaries = [];
+
+        for (let offset = 0; offset < count; offset++) {
+          // Build target month/year by stepping back from the current month.
+          // Using day=1 avoids overflow issues when the current day does not
+          // exist in the previous month (e.g. March 31 -> February).
+          const target = new Date(
+            now.getFullYear(),
+            now.getMonth() - offset,
+            1
+          );
+          const targetMonthIndex = target.getMonth();
+          const targetMonth = targetMonthIndex + 1;
+          const targetYear = target.getFullYear();
+
+          const monthExpenses = expenses.filter((expense) => {
+            const expenseDate = new Date(expense.date);
+            return (
+              expenseDate.getMonth() === targetMonthIndex &&
+              expenseDate.getFullYear() === targetYear
+            );
+          });
+
+          const categoryTotals: Record<
+            string,
+            { total: number; name: string; code: string }
+          > = {};
+
+          monthExpenses.forEach((expense) => {
+            if (!categoryTotals[expense.categoryCode]) {
+              categoryTotals[expense.categoryCode] = {
+                total: 0,
+                name: expense.categoryName,
+                code: expense.categoryCode,
+              };
+            }
+            categoryTotals[expense.categoryCode].total += expense.amount;
+          });
+
+          const categories = Object.values(categoryTotals).sort(
+            (a, b) => b.total - a.total
+          );
+          const grandTotal = categories.reduce(
+            (sum, cat) => sum + cat.total,
+            0
+          );
+
+          summaries.push({
+            month: targetMonth,
+            year: targetYear,
+            categories,
+            grandTotal,
+            expenseCount: monthExpenses.length,
+          });
+        }
+
+        return { months: summaries };
+      } catch (error) {
+        console.error(
+          "[Expenses] Failed to get last months summaries:",
+          error
+        );
+        throw new Error(
+          error instanceof Error
+            ? error.message
+            : "Failed to get last months summaries"
+        );
+      }
+    }),
+
+  getRecentEntries: publicProcedure
+    .input(
+      z
+        .object({
+          monthsBack: z.number().int().min(1).max(12).optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      try {
+        const monthsBack = input?.monthsBack ?? 2;
+        const expenses = await fetchExpensesFromSheet();
+
+        const now = new Date();
+        // Earliest accepted month: first day of the month `monthsBack - 1`
+        // months ago (so monthsBack=2 covers current and previous month).
+        const earliest = new Date(
+          now.getFullYear(),
+          now.getMonth() - (monthsBack - 1),
+          1
+        );
+        earliest.setHours(0, 0, 0, 0);
+
+        const filtered = expenses.filter((expense) => {
+          const expenseDate = new Date(expense.date);
+          return expenseDate >= earliest;
+        });
+
+        // Sort by date descending, then by id descending to keep the latest
+        // entries first (mirrors a "Recent Entries" feed ordering).
+        filtered.sort((a, b) => {
+          const dateDiff =
+            new Date(b.date).getTime() - new Date(a.date).getTime();
+          if (dateDiff !== 0) return dateDiff;
+          return b.id - a.id;
+        });
+
+        return {
+          entries: filtered,
+          count: filtered.length,
+          monthsBack,
+        };
+      } catch (error) {
+        console.error("[Expenses] Failed to get recent entries:", error);
+        throw new Error(
+          error instanceof Error
+            ? error.message
+            : "Failed to get recent entries"
+        );
+      }
+    }),
 });

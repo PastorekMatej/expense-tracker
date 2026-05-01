@@ -29,6 +29,7 @@ export interface ExpenseData {
   amount: number;
   categoryCode: string;
   categoryName: string;
+  comment?: string;
 }
 
 export interface ExpenseRecord {
@@ -37,6 +38,7 @@ export interface ExpenseRecord {
   amount: number;
   categoryCode: string;
   categoryName: string;
+  comment?: string;
 }
 
 // In-memory store for mock mode
@@ -52,9 +54,9 @@ function initializeMockStore() {
     const currentMonth = (today.getMonth() + 1).toString().padStart(2, '0');
     
     mockExpensesStore = [
-      { id: 1, date: `${currentYear}-${currentMonth}-01`, amount: 25.50, categoryCode: "p1", categoryName: "Food Expenses" },
-      { id: 2, date: `${currentYear}-${currentMonth}-05`, amount: 15.00, categoryCode: "p2", categoryName: "Entertainment" },
-      { id: 3, date: `${currentYear}-${currentMonth}-08`, amount: 42.75, categoryCode: "tra", categoryName: "Commuting" },
+      { id: 1, date: `${currentYear}-${currentMonth}-01`, amount: 25.50, categoryCode: "p1", categoryName: "Food Expenses", comment: "" },
+      { id: 2, date: `${currentYear}-${currentMonth}-05`, amount: 15.00, categoryCode: "p2", categoryName: "Entertainment", comment: "" },
+      { id: 3, date: `${currentYear}-${currentMonth}-08`, amount: 42.75, categoryCode: "tra", categoryName: "Commuting", comment: "" },
     ];
   }
 }
@@ -76,6 +78,7 @@ export async function appendToGoogleSheet(data: ExpenseData): Promise<void> {
       amount: data.amount,
       categoryCode: data.categoryCode,
       categoryName: data.categoryName,
+      comment: data.comment ?? "",
     };
     mockExpensesStore.push(newExpense);
     console.log(
@@ -87,9 +90,9 @@ export async function appendToGoogleSheet(data: ExpenseData): Promise<void> {
   try {
     const sheets = getSheets();
     const spreadsheetId = "1KOpJRrbnvVA4aFqjBUZ44RnuJpXb6K-9aY4jIHj0CZc";
-    const range = "Sheet1!A:D"; // Append to columns A-D
+    const range = "Sheet1!A:E"; // Append to columns A-E
 
-    const values = [[data.date, data.amount, data.categoryCode, data.categoryName]];
+    const values = [[data.date, data.amount, data.categoryCode, data.categoryName, data.comment ?? ""]];
 
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId,
@@ -124,7 +127,7 @@ export async function fetchExpensesFromSheet(): Promise<ExpenseRecord[]> {
   try {
     const sheets = getSheets();
     const spreadsheetId = "1KOpJRrbnvVA4aFqjBUZ44RnuJpXb6K-9aY4jIHj0CZc";
-    const range = "Sheet1!A:D"; // Read columns A-D
+    const range = "Sheet1!A:E"; // Read columns A-E
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -145,6 +148,7 @@ export async function fetchExpensesFromSheet(): Promise<ExpenseRecord[]> {
         amount: parseFloat(row[1]) || 0,
         categoryCode: row[2] || "",
         categoryName: row[3] || "",
+        comment: row[4] || "",
       }))
       .filter((exp: ExpenseRecord) => exp.date && exp.amount > 0); // Filter valid entries
 

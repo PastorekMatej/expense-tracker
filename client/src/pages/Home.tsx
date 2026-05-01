@@ -29,20 +29,27 @@ export default function Home() {
   );
   const [amount, setAmount] = useState("");
   const [categoryCode, setCategoryCode] = useState("");
+  const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [formError, setFormError] = useState("");
-  const [entries, setEntries] = useState<
-    Array<{ date: string; amount: string; categoryCode: string; categoryName: string }>
-  >([]);
 
   const addExpenseMutation = trpc.expenses.addExpense.useMutation();
-  const { data: monthlySummary, refetch: refetchMonthlySummary } = trpc.expenses.getMonthlySummary.useQuery(undefined, {
-    enabled: isAuthenticated,
-  });
+  const {
+    data: lastMonthsSummaries,
+    refetch: refetchLastMonthsSummaries,
+  } = trpc.expenses.getLastMonthsSummaries.useQuery(
+    { count: 13 },
+    { enabled: isAuthenticated }
+  );
   const { data: monthlyWeeklySummary, refetch: refetchMonthlyWeeklySummary } =
     trpc.expenses.getMonthlyWeeklySummary.useQuery(undefined, {
       enabled: isAuthenticated,
     });
+  const { data: recentEntriesData, refetch: refetchRecentEntries } =
+    trpc.expenses.getRecentEntries.useQuery(
+      { monthsBack: 2 },
+      { enabled: isAuthenticated }
+    );
 
   const getCategoryName = (code: string) => {
     return CATEGORIES.find((cat) => cat.code === code)?.name || "Invalid Code";
@@ -69,6 +76,8 @@ export default function Home() {
       return;
     }
 
+    const trimmedComment = comment.trim();
+
     try {
       // Send to backend which will write to Google Sheets
       await addExpenseMutation.mutateAsync({
@@ -76,26 +85,23 @@ export default function Home() {
         amount: numAmount,
         categoryCode,
         categoryName,
+        comment: trimmedComment || undefined,
       });
-
-      // Add entry to local list
-      setEntries([
-        { date, amount, categoryCode, categoryName },
-        ...entries,
-      ]);
 
       // Reset form
       setDate(new Date().toISOString().split("T")[0]);
       setAmount("");
       setCategoryCode("");
+      setComment("");
       setSubmitted(true);
 
       // Clear success message after 2 seconds
       setTimeout(() => setSubmitted(false), 2000);
-      
-      // Refetch summaries
-      refetchMonthlySummary();
+
+      // Refetch summaries and recent entries (2 derniers mois)
+      refetchLastMonthsSummaries();
       refetchMonthlyWeeklySummary();
+      refetchRecentEntries();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to record expense");
     }
@@ -234,6 +240,25 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Comment Input */}
+            <div className="space-y-2">
+              <Label htmlFor="comment" className="text-base font-semibold text-gray-700">
+                Commentaire <span className="text-sm font-normal text-gray-500">(optionnel)</span>
+              </Label>
+              <textarea
+                id="comment"
+                placeholder="Ajouter une note sur cette dépense..."
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                maxLength={500}
+                rows={3}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+              />
+              {comment.length > 0 && (
+                <p className="text-xs text-gray-500 text-right">{comment.length}/500</p>
+              )}
+            </div>
+
             {/* Submit Button */}
             <Button
               type="submit"
@@ -246,7 +271,7 @@ export default function Home() {
         </Card>
 
         {/* Spending Recap by Category */}
-        {(monthlyWeeklySummary !== undefined || monthlySummary !== undefined) && (
+        {(monthlyWeeklySummary !== undefined || lastMonthsSummaries !== undefined) && (
           <Card className="p-6 shadow-lg mb-6">
             <h2 className="text-xl font-bold text-gray-800 mb-6">Spending Recap by Category</h2>
             
@@ -303,74 +328,108 @@ export default function Home() {
               </div>
             )}
 
-            {/* Monthly Summary */}
-            {monthlySummary && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-gray-700">
-                    Current Month
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    {new Date(monthlySummary.year, monthlySummary.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
-                  </p>
-                </div>
-                
-                <div className="space-y-2 mb-4">
-                  {CATEGORIES.map((cat) => {
-                    const categoryData = monthlySummary.categories.find(c => c.code === cat.code);
-                    const total = categoryData?.total || 0;
+            {/* Monthly Summary - Current month with details + 3 previous months (totals only) */}
+            {lastMonthsSummaries && lastMonthsSummaries.months.length > 0 && (
+              <div className="space-y-6">
+                {lastMonthsSummaries.months.map((monthSummary, idx) => {
+                  const monthLabel = new Date(
+                    monthSummary.year,
+                    monthSummary.month - 1
+                  ).toLocaleString('default', { month: 'long', year: 'numeric' });
+
+                  // Mois courant : affichage détaillé par catégorie + total
+                  if (idx === 0) {
                     return (
-                      <div key={`month-${cat.code}`} className={`flex items-center justify-between p-3 rounded-lg border ${
-                        total > 0 
-                          ? 'bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-100' 
-                          : 'bg-gray-50 border-gray-200 opacity-60'
-                      }`}>
-                        <div className="flex-1">
-                          <p className="font-semibold text-gray-800">{cat.name}</p>
-                          <p className="text-xs text-gray-600 uppercase">{cat.code}</p>
+                      <div key={`month-${monthSummary.year}-${monthSummary.month}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-lg font-semibold text-gray-700">Current Month</h3>
+                          <p className="text-sm text-gray-500">{monthLabel}</p>
                         </div>
-                        <div className="text-right">
-                          <p className={`text-xl font-bold ${total > 0 ? 'text-indigo-600' : 'text-gray-400'}`}>
-                            ${total.toFixed(2)}
-                          </p>
-                          {monthlySummary.grandTotal > 0 && total > 0 && (
-                            <p className="text-xs text-gray-600">
-                              {((total / monthlySummary.grandTotal) * 100).toFixed(1)}% of total
-                            </p>
-                          )}
+
+                        <div className="space-y-2 mb-4">
+                          {CATEGORIES.map((cat) => {
+                            const categoryData = monthSummary.categories.find(c => c.code === cat.code);
+                            const total = categoryData?.total || 0;
+                            return (
+                              <div key={`month-${monthSummary.year}-${monthSummary.month}-${cat.code}`} className={`flex items-center justify-between p-3 rounded-lg border ${
+                                total > 0
+                                  ? 'bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-100'
+                                  : 'bg-gray-50 border-gray-200 opacity-60'
+                              }`}>
+                                <div className="flex-1">
+                                  <p className="font-semibold text-gray-800">{cat.name}</p>
+                                  <p className="text-xs text-gray-600 uppercase">{cat.code}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className={`text-xl font-bold ${total > 0 ? 'text-indigo-600' : 'text-gray-400'}`}>
+                                    ${total.toFixed(2)}
+                                  </p>
+                                  {monthSummary.grandTotal > 0 && total > 0 && (
+                                    <p className="text-xs text-gray-600">
+                                      {((total / monthSummary.grandTotal) * 100).toFixed(1)}% of total
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="border-t border-indigo-200 pt-3">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="text-sm text-gray-600">Month Total</p>
+                              <p className="text-xs text-gray-500">{monthSummary.expenseCount} transactions</p>
+                            </div>
+                            <p className="text-2xl font-bold text-indigo-700">${monthSummary.grandTotal.toFixed(2)}</p>
+                          </div>
                         </div>
                       </div>
                     );
-                  })}
-                </div>
+                  }
 
-                <div className="border-t border-indigo-200 pt-3">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-sm text-gray-600">Month Total</p>
-                      <p className="text-xs text-gray-500">{monthlySummary.expenseCount} transactions</p>
+                  // Mois précédents : on affiche uniquement la somme totale.
+                  // On regroupe les 3 mois précédents sous un même sous-titre lors du premier
+                  // mois précédent (idx === 1) pour aérer visuellement la liste.
+                  return (
+                    <div key={`month-${monthSummary.year}-${monthSummary.month}`}>
+                      {idx === 1 && (
+                        <h3 className="text-lg font-semibold text-gray-700 mb-3">Previous Months</h3>
+                      )}
+                      <div className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100">
+                        <div>
+                          <p className="font-semibold text-gray-800">{monthLabel}</p>
+                          <p className="text-xs text-gray-500">{monthSummary.expenseCount} transactions</p>
+                        </div>
+                        <p className="text-xl font-bold text-indigo-700">${monthSummary.grandTotal.toFixed(2)}</p>
+                      </div>
                     </div>
-                    <p className="text-2xl font-bold text-indigo-700">${monthlySummary.grandTotal.toFixed(2)}</p>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
             )}
 
           </Card>
         )}
 
-        {/* Recent Entries */}
-        {entries.length > 0 && (
+        {/* Recent Entries (last 2 months) */}
+        {recentEntriesData && recentEntriesData.entries.length > 0 && (
           <div className="space-y-3">
-            <h2 className="text-lg font-bold text-gray-800">Recent Entries</h2>
-            {entries.map((entry, idx) => (
-              <Card key={idx} className="p-4 bg-white shadow">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-800">Recent Entries</h2>
+              <p className="text-xs text-gray-500">Last 2 months · {recentEntriesData.count} entries</p>
+            </div>
+            {recentEntriesData.entries.map((entry) => (
+              <Card key={`entry-${entry.id}-${entry.date}`} className="p-4 bg-white shadow">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <p className="font-semibold text-gray-800">{entry.categoryName}</p>
                     <p className="text-sm text-gray-600">{entry.date}</p>
+                    {entry.comment && (
+                      <p className="text-sm text-gray-500 italic mt-1 break-words">{entry.comment}</p>
+                    )}
                   </div>
-                  <p className="text-lg font-bold text-indigo-600">${entry.amount}</p>
+                  <p className="text-lg font-bold text-indigo-600">${entry.amount.toFixed(2)}</p>
                 </div>
               </Card>
             ))}
