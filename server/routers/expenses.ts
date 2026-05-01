@@ -221,38 +221,48 @@ export const expensesRouter = router({
         };
       };
 
-      const lastDayOfMonth = new Date(
-        currentYear,
-        currentMonthIndex + 1,
-        0
-      ).getDate();
+      const buildMonthWeeks = (year: number, monthIndex: number) => {
+        const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+        const result = [];
+        for (let startDay = 1; startDay <= lastDay; startDay += 7) {
+          const endDay = Math.min(startDay + 6, lastDay);
+          const weekStart = new Date(year, monthIndex, startDay);
+          weekStart.setHours(0, 0, 0, 0);
+          const weekEnd = new Date(year, monthIndex, endDay);
+          weekEnd.setHours(23, 59, 59, 999);
 
-      const weeks = [];
-      for (let weekStartDay = 1; weekStartDay <= lastDayOfMonth; weekStartDay += 7) {
-        const weekEndDay = Math.min(weekStartDay + 6, lastDayOfMonth);
-        const weekStart = new Date(currentYear, currentMonthIndex, weekStartDay);
-        weekStart.setHours(0, 0, 0, 0);
-        const weekEnd = new Date(currentYear, currentMonthIndex, weekEndDay);
-        weekEnd.setHours(23, 59, 59, 999);
+          const weekExpenses = expenses.filter((expense) => {
+            const d = new Date(expense.date);
+            return d >= weekStart && d <= weekEnd;
+          });
 
-        const weekExpenses = expenses.filter((expense) => {
-          const expenseDate = new Date(expense.date);
-          return expenseDate >= weekStart && expenseDate <= weekEnd;
-        });
+          result.push({
+            weekStart: formatDate(weekStart),
+            weekEnd: formatDate(weekEnd),
+            ...buildCategorySummary(weekExpenses),
+          });
+        }
+        return result;
+      };
 
-        const summary = buildCategorySummary(weekExpenses);
+      // Current month weeks
+      const weeks = buildMonthWeeks(currentYear, currentMonthIndex);
 
-        weeks.push({
-          weekStart: formatDate(weekStart),
-          weekEnd: formatDate(weekEnd),
-          ...summary,
-        });
-      }
+      // Previous month: take only the last 2 weeks
+      const prevMonthDate = new Date(currentYear, currentMonthIndex - 1, 1);
+      const prevMonthIndex = prevMonthDate.getMonth();
+      const prevYear = prevMonthDate.getFullYear();
+      const prevMonth = prevMonthIndex + 1;
+      const allPrevWeeks = buildMonthWeeks(prevYear, prevMonthIndex);
+      const previousWeeks = allPrevWeeks.slice(-2);
 
       return {
         month: currentMonth,
         year: currentYear,
         weeks,
+        prevMonth,
+        prevYear,
+        previousWeeks,
       };
     } catch (error) {
       console.error("[Expenses] Failed to get monthly weekly summary:", error);

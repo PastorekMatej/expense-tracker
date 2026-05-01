@@ -22,6 +22,78 @@ const CATEGORIES = [
   { code: "SAL", name: "Salary" },
 ];
 
+type WeekSummary = {
+  weekStart: string;
+  weekEnd: string;
+  grandTotal: number;
+  categories: { code: string; name: string; total: number }[];
+};
+
+function WeekCard({
+  week,
+  label,
+  colorScheme,
+}: {
+  week: WeekSummary;
+  label: string;
+  colorScheme: "blue" | "gray";
+}) {
+  const isBlue = colorScheme === "blue";
+  const headerBg = isBlue
+    ? "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100"
+    : "bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200";
+  const borderColor = isBlue ? "border-blue-100" : "border-gray-200";
+  const totalColor = isBlue ? "text-blue-700" : "text-gray-600";
+  const categoryBg = isBlue
+    ? "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100"
+    : "bg-gray-50 border-gray-200";
+  const amountColor = isBlue ? "text-blue-600" : "text-gray-500";
+
+  return (
+    <div className={`rounded-lg border ${borderColor} bg-white`}>
+      <div className={`flex items-center justify-between px-4 py-3 border-b ${headerBg} rounded-t-lg`}>
+        <div>
+          <p className="text-sm font-semibold text-gray-700">{label}</p>
+          <p className="text-xs text-gray-500">
+            {new Date(week.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            {" - "}
+            {new Date(week.weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </p>
+        </div>
+        <p className={`text-lg font-bold ${totalColor}`}>${week.grandTotal.toFixed(2)}</p>
+      </div>
+
+      {week.categories.length > 0 ? (
+        <div className="space-y-2 p-4">
+          {week.categories.map((category) => (
+            <div
+              key={`${week.weekStart}-${category.code}`}
+              className={`flex items-center justify-between p-3 rounded-lg border ${categoryBg}`}
+            >
+              <div className="flex-1">
+                <p className="font-semibold text-gray-800">{category.name}</p>
+                <p className="text-xs text-gray-600 uppercase">{category.code}</p>
+              </div>
+              <div className="text-right">
+                <p className={`text-base font-bold ${amountColor}`}>${category.total.toFixed(2)}</p>
+                {week.grandTotal > 0 && (
+                  <p className="text-xs text-gray-600">
+                    {((category.total / week.grandTotal) * 100).toFixed(1)}% of total
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-4 text-gray-500 text-sm">
+          No expenses recorded for this week.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
   const [date, setDate] = useState(
@@ -275,56 +347,48 @@ export default function Home() {
           <Card className="p-6 shadow-lg mb-6">
             <h2 className="text-xl font-bold text-gray-800 mb-6">Spending Recap by Category</h2>
             
-            {/* Weekly Summary (All Weeks in Current Month) */}
+            {/* Weekly Summary */}
             {monthlyWeeklySummary && (
               <div className="mb-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-700">
-                    Weekly Breakdown
-                  </h3>
-                  <p className="text-sm text-gray-500">
+                <h3 className="text-lg font-semibold text-gray-700">Weekly Breakdown</h3>
+
+                {/* Last 2 weeks of the previous month */}
+                {monthlyWeeklySummary.previousWeeks.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium text-gray-500 border-b border-gray-200 pb-1">
+                      {new Date(monthlyWeeklySummary.prevYear, monthlyWeeklySummary.prevMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </p>
+                    {monthlyWeeklySummary.previousWeeks.map((week, index) => {
+                      const totalPrevWeeks = monthlyWeeklySummary.previousWeeks.length;
+                      // Rebuild the absolute week number within the prev month by computing
+                      // the offset: we only show the last N weeks, so offset from the end.
+                      const weekLabel = `Week ${index + 1} of ${totalPrevWeeks} (prev)`;
+                      return (
+                        <WeekCard
+                          key={`prevweek-${week.weekStart}-${week.weekEnd}`}
+                          week={week}
+                          label={weekLabel}
+                          colorScheme="gray"
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* All weeks of the current month */}
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-gray-500 border-b border-gray-200 pb-1">
                     {new Date(monthlyWeeklySummary.year, monthlyWeeklySummary.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
                   </p>
+                  {monthlyWeeklySummary.weeks.map((week, index) => (
+                    <WeekCard
+                      key={`week-${week.weekStart}-${week.weekEnd}`}
+                      week={week}
+                      label={`Week ${index + 1}`}
+                      colorScheme="blue"
+                    />
+                  ))}
                 </div>
-
-                {monthlyWeeklySummary.weeks.map((week, index) => (
-                  <div key={`week-${week.weekStart}-${week.weekEnd}`} className="rounded-lg border border-blue-100 bg-white">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-700">Week {index + 1}</p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(week.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(week.weekEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </p>
-                      </div>
-                      <p className="text-lg font-bold text-blue-700">${week.grandTotal.toFixed(2)}</p>
-                    </div>
-
-                    {week.categories.length > 0 ? (
-                      <div className="space-y-2 p-4">
-                        {week.categories.map((category) => (
-                          <div key={`week-${week.weekStart}-${category.code}`} className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-                            <div className="flex-1">
-                              <p className="font-semibold text-gray-800">{category.name}</p>
-                              <p className="text-xs text-gray-600 uppercase">{category.code}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-base font-bold text-blue-600">${category.total.toFixed(2)}</p>
-                              {week.grandTotal > 0 && (
-                                <p className="text-xs text-gray-600">
-                                  {((category.total / week.grandTotal) * 100).toFixed(1)}% of total
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-4 text-gray-500 text-sm">
-                        No expenses recorded for this week.
-                      </div>
-                    )}
-                  </div>
-                ))}
               </div>
             )}
 
